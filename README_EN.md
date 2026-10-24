@@ -11,7 +11,7 @@
 - **Live audio transcription:** local CPU Qwen3-ASR and Silero VAD, short-chunk NDJSON output, bounded queues and reconnects. No automatic cloud model selection or message sending. Near-real-time chunks are not token streaming or a broadcast end-to-end latency guarantee.
 - **Room and danmaku APIs:** room information, bounded reception, heartbeat acknowledgments, and one-shot sending of explicitly supplied text. Business acceptance and observed echo are separate; a missing echo alone does not establish rejection.
 - **Explicit send safeguards:** account checks, durable idempotency records, one POST per attempt, and no automatic retries after uncertain outcomes. Offline rooms are blocked unless `--allow-offline` is explicitly selected; locked rooms and unknown statuses remain blocked.
-- **Bounded interval trials:** a separate opt-in runner pins account, room, text and key prefix, permits at most five attempts, and expires within 30 minutes. Normal defaults remain at least 10 seconds and 30 attempts/hour. A one-second trial target waits after HTTP completion, so actual intervals can be longer. Platform acceptance is not guaranteed and writes are never automatically retried.
+- **Bounded interval trials:** a separate opt-in runner pins account, room, text and key prefix, permits at most five attempts, and expires within 30 minutes. Normal live defaults remain at least 10 seconds, with a 100-attempt hourly cap. Video danmaku remains at 30 attempts/hour; other operation limits are unchanged. A one-second trial target waits after HTTP completion, so actual intervals can be longer. Platform acceptance is not guaranteed and writes are never automatically retried.
 - **Compatibility and diagnostics:** corrects the coin form field to `select_like` and minimizes/redacts response diagnostics. This does not establish that server-side restrictions or rejection causes are resolved.
 - **Disabled experimental source:** optional speaker clustering is retained under `optional/experimental/`, not registered by the launcher. Cluster labels are not personal identities; model weights are not distributed.
 
@@ -32,7 +32,7 @@ Use `python launch.py` to load the extensions and guarded patches. The installed
 
 ## Verification and limits
 
-The current functional revision passed **123 offline test executions** using mocked transport and synthetic data. No fork CI pass is claimed; the CI badge below belongs to upstream. Platform limits, audio quality and public message visibility require separate verification. This is not a finished unattended chat agent and supplies no default automatic-reply, bulk-engagement or gifting workflow. Sends require authorization for the target room and content.
+The current functional revision passed **129 offline test executions** using mocked transport and synthetic data. No fork CI pass is claimed; the CI badge below belongs to upstream. Platform limits, audio quality and public message visibility require separate verification. This is not a finished unattended chat agent and supplies no default automatic-reply, bulk-engagement or gifting workflow. Sends require authorization for the target room and content.
 
 Credentials, runtime state, chat histories, recordings, transcripts, private trial configurations and model weights are excluded. Do not commit these runtime artifacts to a public repository.
 
