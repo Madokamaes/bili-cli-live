@@ -70,7 +70,8 @@ BILI_CLI_HOME="$PWD/state" venv/bin/python - <<'PY'
 import launch, unittest
 suite = unittest.TestSuite()
 for pattern in ("test_coin_form_patch.py", "test_response_diagnostics_patch.py",
-                "test_live_stream.py", "test_live_danmaku.py"):
+                "test_live_stream.py", "test_live_danmaku.py",
+                "test_live_test_trial.py"):
     suite.addTests(unittest.defaultTestLoader.discover("tests", pattern=pattern))
 result = unittest.TextTestRunner(verbosity=2).run(suite)
 raise SystemExit(not result.wasSuccessful())

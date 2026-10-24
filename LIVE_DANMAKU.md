@@ -104,3 +104,22 @@ uncertain outcomes, nonzero and misleading code-zero business replies, absent
 echo, observer cleanup, decompression/event limits, and unchanged global client
 selection. These are offline tests, not evidence of a real successful Bilibili
 send. Actual room/content approval and a separate live test are still required.
+
+### Explicit bounded local interval tests
+
+The normal policy remains 10 seconds and 30 attempts/hour. `live_test_trial.py`
+accepts a private runtime JSON configuration for an explicitly authorized short
+trial. It pins an account, canonical room, exact text and key prefix; limits the
+trial to five sends; expires within 30 minutes; preserves the hourly policy,
+ledger, locked-room checks and opt-in offline rule; and never retries a POST.
+Do not package runtime JSON, credentials, account/room details or the journal.
+The same prefix must not be reused to start a new trial. A durable uncertain or
+rejected outcome stops that session, including after process restart.
+
+The runner uses one sequential HTTP client and one initial room/account check.
+It waits at least the configured interval after each HTTP completion, because
+the shared audit gate records completion time. Thus actual submission intervals
+may exceed the configured one-second minimum. Results contain wall-clock and
+monotonic submission timestamps; business acceptance is not display evidence.
+Rate-limit-disable and auto-wait modes are rejected for these tests. An unknown
+response, timeout, rejection, replay or failed audit stops further sends.

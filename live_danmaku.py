@@ -56,6 +56,60 @@ def _fingerprint(params: dict) -> str:
     return hashlib.sha256(json.dumps(params, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
 
 
+class ScopedTestSession:
+    """Explicit, expiring local-only interval exception for at most five writes.
+
+    Does not alter the default policy or server limits. A session is pinned to
+    one account, canonical room, exact text and predetermined idempotency keys.
+    """
+    def __init__(self, *, room_id, expected_uid, text, key_prefix, expires_at,
+                 count=5, interval=1.0, allow_offline=False):
+        self.room_id = _room_id(room_id)
+        self.expected_uid = str(expected_uid)
+        self.text = text
+        if not isinstance(key_prefix, str) or not re.fullmatch(r"[A-Za-z0-9._:-]{1,120}", key_prefix):
+            raise BiliError("invalid_argument", "Invalid test session prefix")
+        if type(count) is not int or not 1 <= count <= 5:
+            raise BiliError("invalid_argument", "Test session maximum is five")
+        self.interval = _bounded(interval, 1, 10, "test interval")
+        self.expires_at = _bounded(expires_at, time.time(), time.time() + 1800, "test expiry")
+        self.keys = {f"{key_prefix}-{n}" for n in range(1, count + 1)}
+        self.session_id = hashlib.sha256(key_prefix.encode()).hexdigest()
+        self.count = count
+        self.allow_offline = allow_offline is True
+        self.credential = None
+        self.metadata = None
+        self.stopped = False
+        self.busy = False
+
+    def validate(self, room_id, text, key, expected_uid, allow_offline):
+        from bili_cli import output
+        if guard._disabled() or output.settings.wait:
+            raise BiliError("invalid_argument", "Test requires enabled guard and disabled automatic waiting")
+        if (self.stopped or time.time() >= self.expires_at or room_id != self.room_id
+                or text != self.text or key not in self.keys
+                or str(expected_uid) != self.expected_uid
+                or allow_offline is not self.allow_offline):
+            raise BiliError("invalid_argument", "Test session scope or expiry mismatch")
+
+    async def send(self, key):
+        if self.busy:
+            raise BiliError("invalid_argument", "Concurrent test submissions forbidden")
+        self.busy = True
+        try:
+            result = await send(self.room_id, self.text, idempotency_key=key,
+                                expected_uid=self.expected_uid, allow_offline=self.allow_offline,
+                                _test_session=self)
+            if result.get("status") != "accepted" or result.get("idempotent_replay"):
+                self.stopped = True
+            return result
+        except BaseException:
+            self.stopped = True
+            raise
+        finally:
+            self.busy = False
+
+
 class _Ledger:
     """Fail-closed, process-safe, durable intent journal; never stores cookies."""
     def __init__(self, directory: Path | None = None):
@@ -122,7 +176,7 @@ class _Ledger:
                           reason="prior_attempt_in_flight_or_interrupted", retry_allowed=False)
         return result
 
-    def claim(self, key: str, fingerprint: str, result: dict) -> dict | None:
+    def claim(self, key: str, fingerprint: str, result: dict, test_session=None) -> dict | None:
         with self.locked() as entries:
             existing = self._existing(entries, key, fingerprint)
             if existing is not None:
@@ -132,10 +186,26 @@ class _Ledger:
             now = time.time()
             recent = [e.get("started_at", 0) for e in entries.values()
                       if isinstance(e.get("started_at"), (int, float)) and now - e["started_at"] < 3600]
-            if recent and (now - max(recent) < 10 or len(recent) >= 30):
+            interval = test_session.interval if test_session else 10
+            if test_session:
+                session_entries = [e for e in entries.values() if e.get("test_session") == test_session.session_id]
+                if (now >= test_session.expires_at or len(session_entries) >= test_session.count
+                        or any(e.get("result", {}).get("status") != "accepted" for e in session_entries)):
+                    raise BiliError("rate_limited", "Test session exhausted, expired or stopped")
+            if recent and (now - max(recent) < interval or len(recent) >= 30):
                 raise BiliError("rate_limited", "直播弹幕发送间隔至少 10 秒，每小时最多 30 次，含结果未知的尝试。")
-            guard.check("danmaku")
+            # Synchronous, narrowly scoped injection into the existing shared
+            # policy gate; no await and no persistent/global configuration edit.
+            original_limit = guard.LIMITS["danmaku"]
+            try:
+                if test_session:
+                    guard.LIMITS["danmaku"] = (interval, original_limit[1])
+                guard.check("danmaku")
+            finally:
+                guard.LIMITS["danmaku"] = original_limit
             entries[key] = {"fingerprint": fingerprint, "started_at": now, "result": result}
+            if test_session:
+                entries[key]["test_session"] = test_session.session_id
             self.write(entries)
             return None
 
@@ -218,7 +288,8 @@ def _classify(payload: Any, http_status: int) -> dict:
 async def send(room_id: int | str, text: str, *, idempotency_key: str,
                verify_echo: bool = False, echo_timeout: float = 10.0,
                dry_run: bool = False, color: str = "ffffff", mode: str = "scroll",
-               expected_uid: str | int | None = None, allow_offline: bool = False) -> dict:
+               expected_uid: str | int | None = None, allow_offline: bool = False,
+               _test_session: ScopedTestSession | None = None) -> dict:
     """Submit exactly one explicitly supplied message, never retrying a write.
 
     Reusing an idempotency key returns the persisted result without sending.
@@ -241,7 +312,9 @@ async def send(room_id: int | str, text: str, *, idempotency_key: str,
         return {"dry_run": True, "action": "live.send", "requested_room_id": requested,
                 "text": text, "color": color, "mode": mode, "idempotency_key": idempotency_key,
                 "business_success": None, "echo_observed": False, "status": "not_sent"}
-    cred = config.require_credential()
+    if _test_session:
+        _test_session.validate(requested, text, idempotency_key, expected_uid, allow_offline)
+    cred = (_test_session.credential if _test_session else None) or config.require_credential()
     cred.raise_for_no_sessdata()
     cred.raise_for_no_bili_jct()
     cred.raise_for_no_dedeuserid()
@@ -258,10 +331,15 @@ async def send(room_id: int | str, text: str, *, idempotency_key: str,
     if previous is not None:
         return previous
     room = live.LiveRoom(requested, credential=cred)
-    metadata = await room.get_room_play_info()
+    metadata = (_test_session.metadata if _test_session else None) or await room.get_room_play_info()
     canonical = _room_id(metadata.get("room_id"))
     if metadata.get("is_locked") or (metadata.get("live_status") != 1 and not (allow_offline is True and metadata.get("live_status") == 0)):
         raise BiliError("invalid_argument", "直播间未开播或已锁定；没有发送。")
+    if _test_session:
+        if canonical != _test_session.room_id:
+            raise BiliError("invalid_argument", "Test canonical room mismatch")
+        _test_session.credential = cred
+        _test_session.metadata = metadata
     api = network.Api(**live.API["operate"]["send_danmaku"], credential=cred).update_data(
         mode=MODES[mode], msg=text, roomid=canonical, bubble=0, rnd=int(time.time()),
         color=int(color, 16), fontsize=25)
@@ -289,10 +367,12 @@ async def send(room_id: int | str, text: str, *, idempotency_key: str,
               "idempotent_replay": False, "retry_allowed": False,
               "text_sha256": hashlib.sha256(text.encode()).hexdigest()}
     try:
-        previous = ledger.claim(key, fingerprint, result)
+        previous = ledger.claim(key, fingerprint, result, _test_session)
         if previous is not None:
             return previous
         submitted_at = time.time()
+        result["submitted_at"] = submitted_at
+        result["submitted_monotonic"] = time.monotonic()
         if observer:
             observer.arm(submitted_at, str(cred.dedeuserid), text)
         try:
