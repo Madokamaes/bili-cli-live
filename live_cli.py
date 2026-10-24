@@ -37,11 +37,12 @@ def send(room: int = typer.Argument(..., min=1), text: str = typer.Option(..., '
          key: str = typer.Option(..., '--key', help='Unique durable idempotency key; reuse to inspect previous attempt.'),
          expected_uid: str = typer.Option(..., '--expected-uid', help='Expected logged-in Bilibili UID; prevents wrong-account sends.'),
          verify_echo: bool = typer.Option(False, '--verify-echo'),
+         allow_offline: bool = typer.Option(False, '--allow-offline', help='Explicitly allow the requested greeting in an offline, unlocked room.'),
          echo_timeout: float = typer.Option(10., '--echo-timeout', min=1, max=30)):
     """只发送明确提供的弹幕。不确定结果不重试；HTTP 成功不等于已观察到回显。"""
     from live_danmaku import send as perform
     safe_run(lambda: perform(room, text, idempotency_key=key, verify_echo=verify_echo,
-        echo_timeout=echo_timeout, dry_run=output.settings.dry_run, expected_uid=expected_uid))
+        echo_timeout=echo_timeout, dry_run=output.settings.dry_run, expected_uid=expected_uid, allow_offline=allow_offline))
 
 
 @app.command('receive')

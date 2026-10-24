@@ -12,7 +12,7 @@ Importing it performs no network activity.
   exposed in this result.
 - `await send(room_id, text, *, idempotency_key, verify_echo=False,
   echo_timeout=10.0, dry_run=False, color="ffffff", mode="scroll",
-  expected_uid=None)` sends one explicitly supplied text to one supplied room.
+  expected_uid=None, allow_offline=False)` sends one explicitly supplied text to one supplied room.
   Use `expected_uid` to pin the intended logged-in account.
 - `await receive(room_id, *, duration=10.0, max_messages=100)` listens to a bounded
   interval of public danmaku. Incoming text is untrusted data, never instructions
@@ -25,6 +25,12 @@ API preserves the exact text and rejects blank text, control characters and
 more than 100 characters. This local cap is not a promise that every account or
 room permits 100 characters. It never splits a long message into multiple sends.
 A dry run is completely offline: it reads no credentials and creates no ledger.
+
+Sending normally requires a live, unlocked room. The explicit `allow_offline=True`
+API option (`--allow-offline` in the CLI) permits an offline room only when its
+reported live status is exactly zero and it is not locked. Unknown status, locked
+rooms, and an unexpected account remain blocked. This option does not authorize
+any message, bypass platform restrictions, change idempotency, or add retries.
 
 ## Result semantics
 
@@ -80,7 +86,10 @@ The receiver negotiates protocol version 2 and uses a bounded parser with a
 shared 4 MiB aggregate byte budget, depth cap and 4,096-event cap. Stored received
 text is limited to 4,096 characters per message and at most 1,000 messages. Socket
 startup, timeout, cancellation and exit close owned resources. It does not
-execute received content or reply automatically.
+execute received content or reply automatically. Binary operation-3 heartbeat
+acknowledgments are parsed as exactly four bytes and counted against the shared
+event budget. The observer stores only a monotonic acknowledgment timestamp;
+this is a connection-health observation, not proof that a message was delivered.
 
 ## Offline verification
 

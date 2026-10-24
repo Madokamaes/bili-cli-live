@@ -218,7 +218,7 @@ def _classify(payload: Any, http_status: int) -> dict:
 async def send(room_id: int | str, text: str, *, idempotency_key: str,
                verify_echo: bool = False, echo_timeout: float = 10.0,
                dry_run: bool = False, color: str = "ffffff", mode: str = "scroll",
-               expected_uid: str | int | None = None) -> dict:
+               expected_uid: str | int | None = None, allow_offline: bool = False) -> dict:
     """Submit exactly one explicitly supplied message, never retrying a write.
 
     Reusing an idempotency key returns the persisted result without sending.
@@ -260,7 +260,7 @@ async def send(room_id: int | str, text: str, *, idempotency_key: str,
     room = live.LiveRoom(requested, credential=cred)
     metadata = await room.get_room_play_info()
     canonical = _room_id(metadata.get("room_id"))
-    if metadata.get("live_status") != 1 or metadata.get("is_locked"):
+    if metadata.get("is_locked") or (metadata.get("live_status") != 1 and not (allow_offline is True and metadata.get("live_status") == 0)):
         raise BiliError("invalid_argument", "直播间未开播或已锁定；没有发送。")
     api = network.Api(**live.API["operate"]["send_danmaku"], credential=cred).update_data(
         mode=MODES[mode], msg=text, roomid=canonical, bubble=0, rnd=int(time.time()),
@@ -354,6 +354,13 @@ def _events(data: bytes, depth: int = 0, _budget: dict | None = None) -> list[tu
             if decompressor.unconsumed_tail or not decompressor.eof or len(unpacked) > budget["bytes"]:
                 raise ValueError("compressed live frame limit")
             events.extend(_events(unpacked, depth + 1, budget))
+        elif protocol in (0, 1) and operation == 3:
+            if len(body) != 4:
+                raise ValueError("invalid heartbeat response")
+            budget["events"] -= 1
+            if budget["events"] < 0:
+                raise ValueError("live event limit")
+            events.append((3, struct.unpack(">I", body)[0]))
         elif protocol in (0, 1) and operation in (5, 8):
             budget["events"] -= 1
             if budget["events"] < 0:
@@ -398,6 +405,7 @@ class _Observer:
         self.match = None
         self.error = None
         self.max_messages = 100
+        self.last_heartbeat_ack = None
 
     async def start(self, timeout: float = 10.0):
         from curl_cffi.requests import AsyncSession
@@ -455,6 +463,8 @@ class _Observer:
                         if not isinstance(payload, dict) or type(payload.get("code")) is not int or payload["code"] != 0:
                             raise ValueError("live socket authentication rejected")
                         self.ready.set()
+                    if operation == 3:
+                        self.last_heartbeat_ack = time.monotonic()
                     if operation == 5:
                         message = _message(payload, self.room_id)
                         if message is None:

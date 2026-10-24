@@ -166,6 +166,28 @@ class LiveSendTests(unittest.IsolatedAsyncioTestCase):
             await self.send()
         self.assertEqual(self.requests, [])
 
+    async def test_offline_explicit_opt_in_once_and_replay(self):
+        self.play.return_value['live_status'] = 0
+        result = await self.send(allow_offline=True, expected_uid=CRED.dedeuserid)
+        self.assertTrue(result['business_success'])
+        await self.send(allow_offline=True, expected_uid=CRED.dedeuserid)
+        self.assertEqual(len(self.requests), 1)
+
+    async def test_offline_opt_in_never_allows_locked_or_wrong_uid(self):
+        self.play.return_value.update(live_status=0, is_locked=True)
+        with self.assertRaises(BiliError):
+            await self.send(allow_offline=True)
+        self.play.return_value['is_locked'] = False
+        with self.assertRaises(BiliError):
+            await self.send(allow_offline=True, expected_uid='1')
+        self.assertEqual(self.requests, [])
+
+    async def test_offline_opt_in_never_allows_unknown_status(self):
+        self.play.return_value['live_status'] = None
+        with self.assertRaises(BiliError):
+            await self.send(allow_offline=True)
+        self.assertEqual(self.requests, [])
+
     async def test_corrupt_ledger_fails_closed(self):
         (Path(self.temp.name) / 'live_danmaku_ledger.json').write_text('{broken')
         with self.assertRaises(BiliError):
@@ -293,6 +315,25 @@ class ParserTests(unittest.IsolatedAsyncioTestCase):
                     module._events(bad)
         with self.assertRaises(ValueError):
             module._events(self.packet(zlib.compress(b'a' * (4*1024*1024+1)), protocol=2))
+
+    async def test_heartbeat_binary_parser_and_observer(self):
+        from curl_cffi import CurlWsFlag
+        frame = self.packet(struct.pack('>I', 42), op=3, protocol=1)
+        self.assertEqual(module._events(frame), [(3, 42)])
+        for body in (b'', b'abc', b'abcde'):
+            with self.assertRaises(ValueError):
+                module._events(self.packet(body, op=3, protocol=1))
+        class WS:
+            def __init__(self): self.sent = False
+            async def recv(self):
+                if not self.sent:
+                    self.sent = True
+                    return frame, CurlWsFlag.BINARY
+                return b'', CurlWsFlag.CLOSE
+        obs = module._Observer(456, CRED)
+        obs.ws = WS()
+        await obs._read()
+        self.assertIsNotNone(obs.last_heartbeat_ack)
 
     async def test_read_echo_requires_uid_text_and_fresh_timestamp(self):
         from curl_cffi import CurlWsFlag
