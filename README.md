@@ -1,4 +1,44 @@
-> 本分支基于上游 v0.7.0，新增兼容修复及测试。请先阅读 [LOCAL_EXTENSIONS.md](LOCAL_EXTENSIONS.md) 中的版本要求与启动方式；上游 main 分支保持独立。
+# bili-cli for Livestreams
+
+**这是 [kukemc/bili-cli](https://github.com/kukemc/bili-cli) 的直播扩展 fork，不是上游官方发行版。** 保留上游历史和 MIT 许可证，新增代码也随本仓库按 MIT 许可证提供。
+
+**使用直播功能请切换到 [local-extensions-v0.7.0 分支](https://github.com/Madokamaes/bili-cli-live/tree/local-extensions-v0.7.0)。** 默认 `main` 仅增加 fork 说明，不包含直播扩展；扩展基于 `bili-agent==0.7.0` / `bilibili-api-python==17.4.2`，不能直接套用上游最新版。
+
+[English fork overview](README_EN.md) · [安装与版本要求](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LOCAL_EXTENSIONS.md) · [直播转写](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE.md) · [弹幕与发送保障](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE_DANMAKU.md)
+
+## 相比原版增加了什么
+
+- **直播音频转写**：本地 CPU Qwen3-ASR + Silero VAD，短片段持续输出 NDJSON，限制队列和重连次数。不自动调用云端模型，不自动发送弹幕。属于近实时分段识别，不是逐 token 输出，也没有广播端到端延迟保证。
+- **直播间与弹幕 API**：房间信息、限时接收、心跳确认解析，以及明确指定内容的单次发送。HTTP/业务成功与实际观察到回显分别记录；未看到回显不能直接判定失败。
+- **显式发送保护**：账号核对、持久化幂等记录、单次 POST、不确定结果不重发。未开播房间默认禁发，只有显式 `--allow-offline` 才允许未锁定的离线房间；未知状态和锁定房间仍阻止发送。
+- **有界间隔测试**：独立、显式启用的测试入口，绑定账号、房间、文本和键前缀，最多五次，30 分钟内过期。正常默认仍为至少 10 秒、每小时最多 30 次；测试的一秒目标按 HTTP 完成后等待计，实际发送间隔可能更长，不保证平台接受，也不自动重试。
+- **兼容修复和诊断**：投币表单使用 `select_like` 字段；响应诊断尽量只保留结构并脱敏。字段修复不代表服务端风控或拒绝问题已经解决。
+- **可选实验代码**：说话人聚类原型保存在 `optional/experimental/`，默认禁用，不由启动器注册；说话人标签不是身份识别，模型权重不随仓库提供。
+
+## 快速开始
+
+当前扩展使用 POSIX 文件锁，已在 Linux 环境验证；**原生 Windows 暂不支持此扩展**。下方上游的跨平台声明不能视为本扩展的验证结论。
+
+```bash
+git clone --branch local-extensions-v0.7.0 --single-branch https://github.com/Madokamaes/bili-cli-live.git
+cd bili-cli-live
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+python launch.py live --help
+```
+
+使用 `python launch.py` 加载本 fork 的扩展和兼容补丁；直接运行已安装的上游 `bili` 入口不会自动加载这些模块。转写还需要自行配置 ffmpeg、本地 Qwen3-ASR 和 VAD 模型，参考上述文档与 [已验证依赖版本](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE_VERSIONS.json)。
+
+## 验证范围与边界
+
+当前功能修订通过 **123 次离线测试执行**，使用模拟网络和合成数据；未发布 fork 的 CI 通过结论，下方 CI 徽章属于上游。实际平台限制、直播音频质量和弹幕显示仍需分别验证。这不是已完成的无人值守自动聊天系统，也不提供默认自动回复、批量互动或送礼流程。任何发送都需要对应房间和内容的授权。
+
+源码不包含登录凭据、运行状态、聊天记录、录音、转写结果、私有测试配置或模型权重。请勿将这些运行产物加入公开仓库。
+
+## 上游原始说明
+
+以下保留上游项目介绍、安装方式和徽章，用于参考与署名；其中的产品故事、功能承诺和发行状态属于上游。直播扩展请以上方说明和扩展分支文档为准。
 
 <div align="center">
 

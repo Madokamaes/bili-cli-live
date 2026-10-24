@@ -1,4 +1,44 @@
-> This extension branch is based on upstream v0.7.0. See [LOCAL_EXTENSIONS.md](LOCAL_EXTENSIONS.md) for exact version requirements and launcher usage. Upstream main is preserved separately.
+# bili-cli for Livestreams
+
+**A livestream extension fork of [kukemc/bili-cli](https://github.com/kukemc/bili-cli), not an official upstream release.** Upstream history and the MIT license are preserved; the added source is distributed under the same license.
+
+**Use the [local-extensions-v0.7.0 branch](https://github.com/Madokamaes/bili-cli-live/tree/local-extensions-v0.7.0) for livestream features.** Default `main` adds fork documentation only, not the extensions. The extension targets `bili-agent==0.7.0` and `bilibili-api-python==17.4.2`, not the latest upstream release.
+
+[中文说明](README.md) · [Installation and versions](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LOCAL_EXTENSIONS.md) · [Live transcription](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE.md) · [Danmaku and send guarantees](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE_DANMAKU.md)
+
+## What this fork adds
+
+- **Live audio transcription:** local CPU Qwen3-ASR and Silero VAD, short-chunk NDJSON output, bounded queues and reconnects. No automatic cloud model selection or message sending. Near-real-time chunks are not token streaming or a broadcast end-to-end latency guarantee.
+- **Room and danmaku APIs:** room information, bounded reception, heartbeat acknowledgments, and one-shot sending of explicitly supplied text. Business acceptance and observed echo are separate; a missing echo alone does not establish rejection.
+- **Explicit send safeguards:** account checks, durable idempotency records, one POST per attempt, and no automatic retries after uncertain outcomes. Offline rooms are blocked unless `--allow-offline` is explicitly selected; locked rooms and unknown statuses remain blocked.
+- **Bounded interval trials:** a separate opt-in runner pins account, room, text and key prefix, permits at most five attempts, and expires within 30 minutes. Normal defaults remain at least 10 seconds and 30 attempts/hour. A one-second trial target waits after HTTP completion, so actual intervals can be longer. Platform acceptance is not guaranteed and writes are never automatically retried.
+- **Compatibility and diagnostics:** corrects the coin form field to `select_like` and minimizes/redacts response diagnostics. This does not establish that server-side restrictions or rejection causes are resolved.
+- **Disabled experimental source:** optional speaker clustering is retained under `optional/experimental/`, not registered by the launcher. Cluster labels are not personal identities; model weights are not distributed.
+
+## Quick start
+
+The extension currently requires POSIX file locking and has been checked on Linux. **Native Windows is not currently supported by this extension.** Upstream platform badges below do not certify this fork's additions.
+
+```bash
+git clone --branch local-extensions-v0.7.0 --single-branch https://github.com/Madokamaes/bili-cli-live.git
+cd bili-cli-live
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+python launch.py live --help
+```
+
+Use `python launch.py` to load the extensions and guarded patches. The installed upstream `bili` entry point does not automatically load them. Transcription additionally requires ffmpeg and separately configured local Qwen3-ASR/VAD models. See the linked guides and [reviewed dependency versions](https://github.com/Madokamaes/bili-cli-live/blob/local-extensions-v0.7.0/LIVE_VERSIONS.json).
+
+## Verification and limits
+
+The current functional revision passed **123 offline test executions** using mocked transport and synthetic data. No fork CI pass is claimed; the CI badge below belongs to upstream. Platform limits, audio quality and public message visibility require separate verification. This is not a finished unattended chat agent and supplies no default automatic-reply, bulk-engagement or gifting workflow. Sends require authorization for the target room and content.
+
+Credentials, runtime state, chat histories, recordings, transcripts, private trial configurations and model weights are excluded. Do not commit these runtime artifacts to a public repository.
+
+## Original upstream documentation
+
+The upstream introduction, setup instructions and badges are retained below for reference and attribution. Its project story, feature promises and release status belong to upstream. Use the fork overview above and extension-branch guides for livestream behavior.
 
 <div align="center">
 
