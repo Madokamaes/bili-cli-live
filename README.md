@@ -1,3 +1,5 @@
+> 本分支基于上游 v0.7.0，新增兼容修复及测试。请先阅读 [LOCAL_EXTENSIONS.md](LOCAL_EXTENSIONS.md) 中的版本要求与启动方式；上游 main 分支保持独立。
+
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/kukemc/bili-cli/main/assets/banner.png" alt="bili-cli：一句话，让你的 AI Agent 学会运营你的 B 站账号" width="100%">

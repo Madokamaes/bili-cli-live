@@ -1,3 +1,5 @@
+> This extension branch is based on upstream v0.7.0. See [LOCAL_EXTENSIONS.md](LOCAL_EXTENSIONS.md) for exact version requirements and launcher usage. Upstream main is preserved separately.
+
 <div align="center">
 
 <img src="https://raw.githubusercontent.com/kukemc/bili-cli/main/assets/banner.png" alt="bili-cli: one sentence teaches your AI agent to run your Bilibili account" width="100%">

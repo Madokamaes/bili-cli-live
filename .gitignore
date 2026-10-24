@@ -13,3 +13,23 @@ login_qrcode.png
 
 # third-party avatar pictures used to render assets/origin.png
 assets/avatars/
+
+# Local runtime artifacts must never be published
+state/
+patches/
+venv/
+.env*
+*credentials*
+*cookies*
+*login_qrcode*
+relogin*/
+*-models/
+*.ndjson
+*.wav
+*.mp3
+*.mp4
+*.mkv
+*.safetensors
+*.onnx
+*.pt
+*.bin
