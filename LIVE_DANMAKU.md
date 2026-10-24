@@ -73,7 +73,10 @@ used to work around an uncertain send. Idempotency is local to this profile's
 ledger, not a server-side guarantee across installations.
 
 The normal danmaku guard remains active. The live journal additionally counts
-uncertain attempts toward a minimum 10-second spacing and 30 attempts per hour.
+uncertain attempts toward a minimum 10-second spacing and 100 attempts per hour.
+This live-only policy is applied to the shared gate only during its synchronous
+check. Video danmaku remains at 30 attempts/hour; all other operation limits and
+existing shared history remain unchanged.
 
 ## Optional receiver
 
@@ -107,7 +110,7 @@ send. Actual room/content approval and a separate live test are still required.
 
 ### Explicit bounded local interval tests
 
-The normal policy remains 10 seconds and 30 attempts/hour. `live_test_trial.py`
+The normal live policy remains 10 seconds and 100 attempts/hour. `live_test_trial.py`
 accepts a private runtime JSON configuration for an explicitly authorized short
 trial. It pins an account, canonical room, exact text and key prefix; limits the
 trial to five sends; expires within 30 minutes; preserves the hourly policy,

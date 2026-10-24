@@ -31,6 +31,8 @@ from bili_safe_diagnostics import summarize_response
 SDK_VERSION = "17.4.2"
 SEND_URL = "https://api.live.bilibili.com/msg/send"
 MAX_TEXT_LENGTH = 100
+LIVE_MIN_INTERVAL = 10
+LIVE_PER_HOUR = 100
 MODES = {"scroll": 1, "top": 5, "bottom": 4}
 _SUCCESS_MESSAGES = {None, "", "0", "ok", "OK", "success", "成功"}
 
@@ -186,20 +188,19 @@ class _Ledger:
             now = time.time()
             recent = [e.get("started_at", 0) for e in entries.values()
                       if isinstance(e.get("started_at"), (int, float)) and now - e["started_at"] < 3600]
-            interval = test_session.interval if test_session else 10
+            interval = test_session.interval if test_session else LIVE_MIN_INTERVAL
             if test_session:
                 session_entries = [e for e in entries.values() if e.get("test_session") == test_session.session_id]
                 if (now >= test_session.expires_at or len(session_entries) >= test_session.count
                         or any(e.get("result", {}).get("status") != "accepted" for e in session_entries)):
                     raise BiliError("rate_limited", "Test session exhausted, expired or stopped")
-            if recent and (now - max(recent) < interval or len(recent) >= 30):
-                raise BiliError("rate_limited", "直播弹幕发送间隔至少 10 秒，每小时最多 30 次，含结果未知的尝试。")
+            if recent and (now - max(recent) < interval or len(recent) >= LIVE_PER_HOUR):
+                raise BiliError("rate_limited", f"直播弹幕发送间隔至少 {LIVE_MIN_INTERVAL} 秒，每小时最多 {LIVE_PER_HOUR} 次，含结果未知的尝试。")
             # Synchronous, narrowly scoped injection into the existing shared
             # policy gate; no await and no persistent/global configuration edit.
             original_limit = guard.LIMITS["danmaku"]
             try:
-                if test_session:
-                    guard.LIMITS["danmaku"] = (interval, original_limit[1])
+                guard.LIMITS["danmaku"] = (interval, LIVE_PER_HOUR)
                 guard.check("danmaku")
             finally:
                 guard.LIMITS["danmaku"] = original_limit
